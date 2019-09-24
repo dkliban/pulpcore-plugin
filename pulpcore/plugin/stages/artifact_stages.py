@@ -2,9 +2,11 @@ import asyncio
 from gettext import gettext as _
 import logging
 
+from aiohttp import ClientResponseError
 from django.db.models import Q, Prefetch, prefetch_related_objects
 
 from pulpcore.plugin.models import Artifact, ContentArtifact, ProgressReport, RemoteArtifact
+from pulpcore.plugin.tasking import Task
 
 from .api import Stage
 
@@ -116,6 +118,8 @@ class ArtifactDownloader(Stage):
         #    Set to None if stage is shutdown.
         content_get_task = _add_to_pending(content_iterator.__anext__())
 
+        pulp_task = Task()
+
         with ProgressReport(message='Downloading Artifacts', code='downloading.artifacts') as pb:
             try:
                 while pending:
@@ -129,8 +133,11 @@ class ArtifactDownloader(Stage):
                                 # content instances: shutdown
                                 content_get_task = None
                         else:
-                            pb.done += task.result()  # download_count
-                            pb.save()
+                            try:
+                                pb.done += task.result()  # download_count
+                                pb.save()
+                            except ClientResponseError as e:
+                                pulp_task.append_non_fatal_error(e)
 
                     if content_get_task and content_get_task not in pending:  # not yet shutdown
                         if len(pending) < self.max_concurrent_content:

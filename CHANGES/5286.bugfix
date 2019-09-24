@@ -1,0 +1,2 @@
+ArtifactDownloader stage appends non-fatal error to a Task when an Artifact fails to download. 
+
